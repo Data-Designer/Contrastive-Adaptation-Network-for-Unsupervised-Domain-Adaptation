@@ -73,6 +73,7 @@ class CANSolver(BaseSolver):
                 eval3 < self.opt.TRAIN.STOP_THRESHOLDS[2])
 
     def solve(self):
+	"""交替优化-Target Label"""
         stop = False
         if self.resume:
             self.iters += 1
@@ -176,6 +177,7 @@ class CANSolver(BaseSolver):
         dataloader.construct()
 
     def CAS(self):
+	"""类采样"""
         samples = self.get_samples('categorical')
 
         source_samples = samples['Img_source']
@@ -200,6 +202,7 @@ class CANSolver(BaseSolver):
         print('Iterations in one loop: %d' % (self.iters_per_loop))
 
     def update_network(self, filtered_classes):
+	"""交替优化-网络"""
         # initial configuration
         stop = False
         update_iters = 0
@@ -227,7 +230,7 @@ class CANSolver(BaseSolver):
                           source_sample['Label']
 
             source_data = to_cuda(source_data)
-            source_gt = to_cuda(source_gt)
+            source_gt = to_cuda(source_gt) # ground truth
             self.net.module.set_bn_domain(self.bn_domain_map[self.source_name])
             source_preds = self.net(source_data)['logits']
 
@@ -260,10 +263,10 @@ class CANSolver(BaseSolver):
                 feats_toalign_T = self.prepare_feats(feats_target)                 
 
                 cdd_loss = self.cdd.forward(feats_toalign_S, feats_toalign_T, 
-                               source_nums_cls, target_nums_cls)[self.discrepancy_key]
+                               source_nums_cls, target_nums_cls)[self.discrepancy_key] # cdd cal
 
                 cdd_loss *= self.opt.CDD.LOSS_WEIGHT
-                cdd_loss.backward()
+                cdd_loss.backward() # 注意是分别backward，不是加和backward
 
                 cdd_loss_iter += cdd_loss
                 loss += cdd_loss
