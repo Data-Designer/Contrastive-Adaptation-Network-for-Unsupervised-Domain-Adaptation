@@ -146,6 +146,7 @@ class CANSolver(BaseSolver):
         self.clustering.feature_clustering(net, target_dataloader)
 
     def filtering(self):
+	"""filter abnormal samples and classed, for high confidence"""
         threshold = self.opt.CLUSTERING.FILTERING_THRESHOLD
         min_sn_cls = self.opt.TRAIN.MIN_SN_PER_CLASS
         target_samples = self.clustered_target_samples
@@ -164,13 +165,13 @@ class CANSolver(BaseSolver):
     def construct_categorical_dataloader(self, samples, filtered_classes): # 这个修改dataloader的方式值得注意一下
         # update self.dataloader
         target_classwise = solver_utils.split_samples_classwise(
-			samples, self.opt.DATASET.NUM_CLASSES)
+			samples, self.opt.DATASET.NUM_CLASSES) # class-wise list [[sample1,sample1],[sample-class2,sample-class2]]
 
         dataloader = self.train_data['categorical']['loader']
         classnames = dataloader.classnames
         dataloader.class_set = [classnames[c] for c in filtered_classes]
         dataloader.target_paths = {classnames[c]: target_classwise[c]['data'] \
-                      for c in filtered_classes}
+                      for c in filtered_classes} # {c1:[sample,...]}
         dataloader.num_selected_classes = min(self.opt.TRAIN.NUM_SELECTED_CLASSES, len(filtered_classes))
         dataloader.construct()
 
