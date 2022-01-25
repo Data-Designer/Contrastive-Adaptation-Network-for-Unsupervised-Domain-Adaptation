@@ -13,6 +13,7 @@ class CDD(object):
         self.num_layers = num_layers
     
     def split_classwise(self, dist, nums):
+	"""转换为class-level的discrepany"""
         num_classes = len(nums)
         start = end = 0
         dist_list = []
@@ -21,29 +22,30 @@ class CDD(object):
             end = start + nums[c]
             dist_c = dist[start:end, start:end]
             dist_list += [dist_c]
-        return dist_list
+        return dist_list # [patch,patch]切分为很多小块
 
     def gamma_estimation(self, dist):
         dist_sum = torch.sum(dist['ss']) + torch.sum(dist['tt']) + \
 	    	2 * torch.sum(dist['st'])
 
-        bs_S = dist['ss'].size(0)
-        bs_T = dist['tt'].size(0)
+        bs_S = dist['ss'].size(0) # K1
+        bs_T = dist['tt'].size(0) # K2
         N = bs_S * bs_S + bs_T * bs_T + 2 * bs_S * bs_T - bs_S - bs_T
         gamma = dist_sum.item() / N 
         return gamma
 
     def patch_gamma_estimation(self, nums_S, nums_T, dist):
+	""""""
         assert(len(nums_S) == len(nums_T))
-        num_classes = len(nums_S)
+        num_classes = len(nums_S) # Note： nums_S看起来是个列表
 
         patch = {}
         gammas = {}
-        gammas['st'] = to_cuda(torch.zeros_like(dist['st'], requires_grad=False))
+        gammas['st'] = to_cuda(torch.zeros_like(dist['st'], requires_grad=False)) # [B,D]
         gammas['ss'] = [] 
         gammas['tt'] = [] 
         for c in range(num_classes):
-            gammas['ss'] += [to_cuda(torch.zeros([num_classes], requires_grad=False))]
+            gammas['ss'] += [to_cuda(torch.zeros([num_classes], requires_grad=False))] # [patch]
             gammas['tt'] += [to_cuda(torch.zeros([num_classes], requires_grad=False))]
 
         source_start = source_end = 0
@@ -61,14 +63,14 @@ class CDD(object):
                 patch['st'] = dist['st'].narrow(0, source_start, 
                        nums_S[ns]).narrow(1, target_start, nums_T[nt]) 
 
-                gamma = self.gamma_estimation(patch)
+                gamma = self.gamma_estimation(patch) # patch {'ss':K*M,'st':K*M,'tt':K2*M2} -> scalar
 
                 gammas['ss'][ns][nt] = gamma
                 gammas['tt'][nt][ns] = gamma
                 gammas['st'][source_start:source_end, \
                      target_start:target_end] = gamma
 
-        return gammas
+        return gammas # {}
 
     def compute_kernel_dist(self, dist, gamma, kernel_num, kernel_mul):
         base_gamma = gamma / (kernel_mul ** (kernel_num // 2))
@@ -136,12 +138,13 @@ class CDD(object):
         return mean_tensor
         
     def compute_paired_dist(self, A, B):
-        bs_A = A.size(0)
-        bs_T = B.size(0)
+	"""计算特征层差异"""
+        bs_A = A.size(0) # B1,D
+        bs_T = B.size(0) # B2,D
         feat_len = A.size(1)
 
-        A_expand = A.unsqueeze(1).expand(bs_A, bs_T, feat_len)
-        B_expand = B.unsqueeze(0).expand(bs_A, bs_T, feat_len)
+        A_expand = A.unsqueeze(1).expand(bs_A, bs_T, feat_len) # B1,B2,D
+        B_expand = B.unsqueeze(0).expand(bs_A, bs_T, feat_len) # B1,B2,D
         dist = (((A_expand - B_expand))**2).sum(2)
         return dist
 
@@ -152,8 +155,8 @@ class CDD(object):
 
         num_classes = len(nums_S)
 
-        # compute the dist 
-        dist_layers = []
+        # compute the dist - multi-layer
+        dist_layers = [] # [{dic},{dic}]
         gamma_layers = []
 
         for i in range(self.num_layers):
@@ -162,13 +165,13 @@ class CDD(object):
             cur_target = target[i]
 
             dist = {}
-            dist['ss'] = self.compute_paired_dist(cur_source, cur_source)
+            dist['ss'] = self.compute_paired_dist(cur_source, cur_source) # B,D，指的应该是特征层之间的差异
             dist['tt'] = self.compute_paired_dist(cur_target, cur_target)
             dist['st'] = self.compute_paired_dist(cur_source, cur_target)
 
-            dist['ss'] = self.split_classwise(dist['ss'], nums_S)
+            dist['ss'] = self.split_classwise(dist['ss'], nums_S) # [x,x,x,x]
             dist['tt'] = self.split_classwise(dist['tt'], nums_T)
-            dist_layers += [dist]
+            dist_layers += [dist] # dist = {'ss':[patch,patch],"st":B*D} # distance
 
             gamma_layers += [self.patch_gamma_estimation(nums_S, nums_T, dist)]
 
@@ -178,8 +181,8 @@ class CDD(object):
                 gamma_layers[i]['ss'][c] = gamma_layers[i]['ss'][c].view(num_classes, 1, 1)
                 gamma_layers[i]['tt'][c] = gamma_layers[i]['tt'][c].view(num_classes, 1, 1)
 
-        kernel_dist_st = self.kernel_layer_aggregation(dist_layers, gamma_layers, 'st')
-        kernel_dist_st = self.patch_mean(nums_S, nums_T, kernel_dist_st)
+        kernel_dist_st = self.kernel_layer_aggregation(dist_layers, gamma_layers, 'st') # 加权的权重
+        kernel_dist_st = self.patch_mean(nums_S, nums_T, kernel_dist_st) # Num class * Num class
 
         kernel_dist_ss = []
         kernel_dist_tt = []
@@ -192,12 +195,12 @@ class CDD(object):
         kernel_dist_ss = torch.stack(kernel_dist_ss, dim=0)
         kernel_dist_tt = torch.stack(kernel_dist_tt, dim=0).transpose(1, 0)
 
-        mmds = kernel_dist_ss + kernel_dist_tt - 2 * kernel_dist_st
-        intra_mmds = torch.diag(mmds, 0)
+        mmds = kernel_dist_ss + kernel_dist_tt - 2 * kernel_dist_st # ccd
+        intra_mmds = torch.diag(mmds, 0) # intra计算
         intra = torch.sum(intra_mmds) / self.num_classes
 
         inter = None
-        if not self.intra_only:
+        if not self.intra_only: # inter计算
             inter_mask = to_cuda((torch.ones([num_classes, num_classes]) \
                     - torch.eye(num_classes)).type(torch.ByteTensor))
             inter_mmds = torch.masked_select(mmds, inter_mask)
