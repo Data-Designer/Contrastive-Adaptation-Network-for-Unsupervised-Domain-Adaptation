@@ -36,6 +36,7 @@ class CANSolver(BaseSolver):
         self.clustered_target_samples = {}
 
     def complete_training(self):
+	"""聚类终止条件"""
         if self.loop >= self.opt.TRAIN.MAX_LOOP:
             return True
 
