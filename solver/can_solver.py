@@ -86,7 +86,7 @@ class CANSolver(BaseSolver):
             with torch.no_grad():
                 #self.update_ss_alignment_loss_weight()
                 print('Clustering based on %s...' % self.source_name)
-                self.update_labels()
+                self.update_labels() # 初始化target center
                 self.clustered_target_samples = self.clustering.samples
                 target_centers = self.clustering.centers 
                 center_change = self.clustering.center_change 
