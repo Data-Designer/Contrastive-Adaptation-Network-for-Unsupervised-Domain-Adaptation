@@ -36,6 +36,7 @@ class CANSolver(BaseSolver):
         self.clustered_target_samples = {}
 
     def complete_training(self):
+	"""迭代终止条件"""
         if self.loop >= self.opt.TRAIN.MAX_LOOP:
             return True
 
@@ -105,11 +106,11 @@ class CANSolver(BaseSolver):
                                                 self.opt.DATASET.NUM_CLASSES)
                     gts = self.clustered_target_samples['gt']
                     res = self.model_eval(preds, gts)
-                    print('Clustering %s: %.4f' % (self.opt.EVAL_METRIC, res))
+                    print('Clustering %s: %.4f' % (self.opt.EVAL_METRIC, res)) # 记录中间聚类效果？
 
                 # check if meet the stop condition
                 stop = self.complete_training()
-                if stop: break
+                if stop: break # for循环直至迭代终止
                 
                 # filtering the clustering results
                 target_hypt, filtered_classes = self.filtering()
@@ -120,7 +121,7 @@ class CANSolver(BaseSolver):
                 self.compute_iters_per_loop(filtered_classes)
 
             # k-step update of network parameters through forward-backward process
-            self.update_network(filtered_classes)
+            self.update_network(filtered_classes) # 更新参数
             self.loop += 1
 
         print('Training Done!')
