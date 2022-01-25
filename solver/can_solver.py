@@ -126,6 +126,7 @@ class CANSolver(BaseSolver):
         print('Training Done!')
         
     def update_labels(self):
+	"""get target center"""
         net = self.net
         net.eval()
         opt = self.opt
@@ -139,7 +140,7 @@ class CANSolver(BaseSolver):
         init_target_centers = source_centers
 
         target_dataloader = self.train_data[self.clustering_target_name]['loader']
-        net.module.set_bn_domain(self.bn_domain_map[self.target_name])
+        net.module.set_bn_domain(self.bn_domain_map[self.target_name]) # 这里似乎是给batchnormalization 命名，但是我不知道为啥
 
         self.clustering.set_init_centers(init_target_centers)
         self.clustering.feature_clustering(net, target_dataloader)
@@ -160,7 +161,7 @@ class CANSolver(BaseSolver):
         print('The number of filtered classes: %d.' % len(filtered_classes))
         return chosen_samples, filtered_classes
 
-    def construct_categorical_dataloader(self, samples, filtered_classes):
+    def construct_categorical_dataloader(self, samples, filtered_classes): # 这个修改dataloader的方式值得注意一下
         # update self.dataloader
         target_classwise = solver_utils.split_samples_classwise(
 			samples, self.opt.DATASET.NUM_CLASSES)
