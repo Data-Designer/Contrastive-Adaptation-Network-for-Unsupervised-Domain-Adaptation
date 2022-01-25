@@ -17,7 +17,7 @@ class BatchNormDomain(DomainModule):
         super(BatchNormDomain, self).__init__(num_domains)
         self.bn_domain = nn.ModuleDict() 
         for n in range(self.num_domains):
-            self.bn_domain[str(n)] = norm_layer(in_size, **kwargs)
+            self.bn_domain[str(n)] = norm_layer(in_size, **kwargs) # 为啥要分开归一化
 
     def forward(self, x):
         out = self.bn_domain[str(self.domain)](x)
